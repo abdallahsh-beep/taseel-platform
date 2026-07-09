@@ -139,6 +139,41 @@ export default function PostPreview({ platform, text }: { platform: string; text
     );
   }
 
+  if (platform === "youtube") {
+    return (
+      <div className="overflow-hidden rounded-xl border border-steel-300/60 bg-white">
+        <div className="pattern-bg relative flex aspect-video items-center justify-center bg-sand-100 text-sand-600">
+          🖼️ الفيديو (16:9)
+          <span className="absolute flex h-11 w-16 items-center justify-center rounded-xl bg-[#FF0000] text-lg text-white">▶</span>
+        </div>
+        <div className="flex gap-3 p-3">
+          <Avatar />
+          <div className="min-w-0 flex-1">
+            <p className="whitespace-pre-wrap text-[15px] font-bold leading-6 text-ink-900">{body}</p>
+            <div className="mt-1 flex items-center gap-1.5 text-xs text-steel-500">
+              <span>قناة تأصيل التعليمية · 1.2K مشاهدة · الآن</span>
+              <span className="mr-auto"><PlatformIcon platform="youtube" size={16} /></span>
+            </div>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  if (platform === "tiktok") {
+    return (
+      <div className="mx-auto max-w-[260px] overflow-hidden rounded-xl border border-steel-300/60">
+        <div className="pattern-bg relative flex aspect-[9/16] items-end bg-navy-900 p-3">
+          <span className="absolute right-3 top-3"><PlatformIcon platform="tiktok" size={20} mono className="text-white" /></span>
+          <div className="relative z-10 w-full">
+            <div className="mb-1 text-sm font-bold text-white" dir="ltr">@j_taseel</div>
+            <p className="whitespace-pre-wrap text-[13px] leading-5 text-white/90">{body}</p>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
   // لينكد إن
   return (
     <div className="rounded-xl border border-steel-300/60 bg-white p-4">

@@ -26,6 +26,8 @@ async function main() {
     { id: 4, key: "linkedin", nameAr: "لينكد إن", maxChars: 3000 },
     { id: 5, key: "whatsapp", nameAr: "واتساب", maxChars: 4096 },
     { id: 6, key: "telegram", nameAr: "تليجرام", maxChars: 4096 },
+    { id: 7, key: "youtube", nameAr: "يوتيوب", maxChars: 5000 },
+    { id: 8, key: "tiktok", nameAr: "تيك توك", maxChars: 2200 },
   ];
   for (const p of platforms) await db.platform.upsert({ where: { id: p.id }, create: p, update: p });
 

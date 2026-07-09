@@ -23,6 +23,8 @@ const PLATFORM_OPTIONS = [
   { id: 4, key: "linkedin", label: "لينكد إن" },
   { id: 5, key: "whatsapp", label: "واتساب" },
   { id: 6, key: "telegram", label: "تليجرام" },
+  { id: 7, key: "youtube", label: "يوتيوب" },
+  { id: 8, key: "tiktok", label: "تيك توك" },
 ];
 
 export default function CalendarShell({

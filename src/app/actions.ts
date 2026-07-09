@@ -596,6 +596,8 @@ const PLATFORM_NAME_TO_ID: Record<string, number> = {
   linkedin: 4, "لينكد إن": 4, "لينكدإن": 4,
   whatsapp: 5, "واتساب": 5, "واتس اب": 5, "وتساب": 5,
   telegram: 6, "تليجرام": 6, "تلجرام": 6, "تيليجرام": 6,
+  youtube: 7, "يوتيوب": 7, "يو تيوب": 7,
+  tiktok: 8, "تيك توك": 8, "تيكتوك": 8, "تك توك": 8,
 };
 
 export async function importCsv(formData: FormData) {
