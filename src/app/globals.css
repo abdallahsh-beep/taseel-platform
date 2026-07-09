@@ -1,0 +1,74 @@
+@import "tailwindcss";
+
+/* لوحة ألوان هوية تأصيل التعليمية — من ملف «الوان وهوية مبسطة» */
+@theme {
+  --color-navy-950: #12232f;
+  --color-navy-900: #1b3347; /* الكحلي الداكن */
+  --color-navy-700: #304f6d; /* الكحلي الأساسي */
+  --color-navy-500: #4a6b8a;
+  --color-steel-500: #758694; /* الأزرق الرمادي */
+  --color-steel-300: #b4b6c5; /* الرمادي الفاتح */
+  --color-sand-600: #a97f52;
+  --color-sand-500: #c1996b; /* الذهبي الرملي */
+  --color-sand-300: #ddc1a3; /* البيج */
+  --color-sand-100: #f0e5d5;
+  --color-cream-50: #fbf6ef; /* خلفية الهوية الكريمية */
+  --color-ink-900: #383838; /* الرمادي الداكن */
+
+  --font-heading: var(--font-qomra), var(--font-sakkal), system-ui;
+  --font-body: var(--font-sakkal), system-ui;
+}
+
+body {
+  font-family: var(--font-sakkal), system-ui, sans-serif;
+}
+
+h1,
+h2,
+h3,
+h4,
+.font-heading {
+  font-family: var(--font-qomra), var(--font-sakkal), system-ui, sans-serif;
+}
+
+/* النمط الزخرفي المشتق من شعار تأصيل (معيّنات + مفاصل) */
+.pattern-bg {
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='96' height='72' viewBox='0 0 96 72'%3E%3Cg fill='%231B3347' fill-opacity='0.05'%3E%3Crect x='8' y='12' width='7' height='7' transform='rotate(45 11.5 15.5)'/%3E%3Cpath d='M26 10l10 0 8 9-6 0-8-9z'/%3E%3Crect x='56' y='12' width='7' height='7' transform='rotate(45 59.5 15.5)'/%3E%3Cpath d='M74 10l10 0 8 9-6 0-8-9z'/%3E%3Crect x='32' y='46' width='7' height='7' transform='rotate(45 35.5 49.5)'/%3E%3Cpath d='M50 53l8-9 10 0-8 9-10 0z'/%3E%3C/g%3E%3C/svg%3E");
+}
+
+.pattern-bg-light {
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='96' height='72' viewBox='0 0 96 72'%3E%3Cg fill='%23FBF6EF' fill-opacity='0.07'%3E%3Crect x='8' y='12' width='7' height='7' transform='rotate(45 11.5 15.5)'/%3E%3Cpath d='M26 10l10 0 8 9-6 0-8-9z'/%3E%3Crect x='56' y='12' width='7' height='7' transform='rotate(45 59.5 15.5)'/%3E%3Cpath d='M74 10l10 0 8 9-6 0-8-9z'/%3E%3Crect x='32' y='46' width='7' height='7' transform='rotate(45 35.5 49.5)'/%3E%3Cpath d='M50 53l8-9 10 0-8 9-10 0z'/%3E%3C/g%3E%3C/svg%3E");
+}
+
+::selection {
+  background: var(--color-sand-300);
+  color: var(--color-navy-900);
+}
+
+* {
+  scrollbar-width: thin;
+  scrollbar-color: var(--color-steel-300) transparent;
+}
+
+/* تصدير الروزنامة للطباعة / PDF (FR-33) */
+@media print {
+  @page {
+    size: A4 landscape;
+    margin: 10mm;
+  }
+  body * {
+    visibility: hidden;
+  }
+  .print-area,
+  .print-area * {
+    visibility: visible;
+  }
+  .print-area {
+    position: absolute;
+    inset: 0;
+    width: 100%;
+  }
+  .print-area button {
+    pointer-events: none;
+  }
+}

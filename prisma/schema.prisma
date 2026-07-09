@@ -1,0 +1,257 @@
+// روزنامة تأصيل — مخطط قاعدة البيانات (نموذج أولي على SQLite)
+// للإنتاج: تغيير provider إلى postgresql فقط — البنية مطابقة لقسم 9 من الـ PRD
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  id           String   @id @default(uuid())
+  name         String
+  email        String   @unique
+  passwordHash String
+  roles        String // أدوار مفصولة بفواصل: admin,supervisor,writer,designer,publisher
+  jobTitle     String   @default("") // المسمى الوظيفي كما في الجمعية
+  isActive     Boolean  @default(true)
+  createdAt    DateTime @default(now())
+
+  createdItems  ContentItem[]  @relation("creator")
+  writtenItems  ContentItem[]  @relation("writer")
+  designedItems ContentItem[]  @relation("designer")
+  comments      Comment[]
+  approvals     Approval[]     @relation("reviewer")
+  requested     Approval[]     @relation("requester")
+  activities    ActivityLog[]
+  notifications Notification[]
+  assets        MediaAsset[]
+  assetVersions AssetVersion[]
+  shareLinks    ShareLink[]
+}
+
+model Notification {
+  id        String    @id @default(uuid())
+  userId    String
+  type      String // assigned|mentioned|approval_requested|approved|rejected|published|commented
+  message   String
+  itemId    String?
+  readAt    DateTime?
+  createdAt DateTime  @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, readAt])
+}
+
+model MediaAsset {
+  id           String   @id @default(uuid())
+  name         String
+  folder       String   @default("عام") // شعارات | قوالب | صور عامة | عام
+  tags         String   @default("")
+  uploadedById String
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  uploadedBy User           @relation(fields: [uploadedById], references: [id])
+  versions   AssetVersion[]
+}
+
+model AssetVersion {
+  id           String   @id @default(uuid())
+  assetId      String
+  versionNo    Int
+  filePath     String // مسار الملف تحت public/uploads
+  mimeType     String
+  sizeBytes    Int
+  note         String   @default("")
+  uploadedById String
+  createdAt    DateTime @default(now())
+
+  asset      MediaAsset        @relation(fields: [assetId], references: [id], onDelete: Cascade)
+  uploadedBy User              @relation(fields: [uploadedById], references: [id])
+  itemLinks  ContentItemAsset[]
+
+  @@unique([assetId, versionNo])
+}
+
+model ContentItemAsset {
+  contentItemId  String
+  assetVersionId String
+  role           String @default("design") // design | attachment
+
+  item    ContentItem  @relation(fields: [contentItemId], references: [id], onDelete: Cascade)
+  version AssetVersion @relation(fields: [assetVersionId], references: [id], onDelete: Cascade)
+
+  @@id([contentItemId, assetVersionId])
+}
+
+model ShareLink {
+  id          String    @id @default(uuid())
+  token       String    @unique
+  scope       String // item | month
+  targetId    String? // البطاقة عند scope = item
+  periodStart DateTime? // بداية الشهر عند scope = month
+  expiresAt   DateTime
+  createdById String
+  revokedAt   DateTime?
+  viewCount   Int       @default(0)
+  createdAt   DateTime  @default(now())
+
+  createdBy User @relation(fields: [createdById], references: [id])
+}
+
+model Status {
+  id        Int    @id
+  key       String @unique // idea|writing|design|pending_approval|approved_ready|published|scheduled|publishing|failed
+  labelAr   String
+  sortOrder Int
+  phase     Int    @default(1)
+
+  items ContentItem[]
+}
+
+model Category {
+  id       String  @id @default(uuid())
+  nameAr   String
+  color    String // من لوحة ألوان الهوية
+  isActive Boolean @default(true)
+
+  items ContentItem[]
+}
+
+model Platform {
+  id       Int    @id
+  key      String @unique // x|instagram|facebook|linkedin
+  nameAr   String
+  maxChars Int
+
+  variants PlatformVariant[]
+}
+
+model ContentItem {
+  id             String    @id @default(uuid())
+  title          String
+  baseText       String    @default("")
+  hashtags       String    @default("") // مفصولة بمسافات
+  referenceLinks String    @default("") // سطر لكل رابط
+  labels         String    @default("") // وسوم حرة مفصولة بفواصل (Planable Labels)
+  campaignId     String?
+  categoryId     String
+  statusId       Int
+  scheduledAt    DateTime
+  timezone       String    @default("Asia/Riyadh")
+  textDueAt      DateTime?
+  designDueAt    DateTime?
+  writerId       String?
+  designerId     String?
+  createdById    String
+  deletedAt      DateTime?
+  createdAt      DateTime  @default(now())
+  updatedAt      DateTime  @updatedAt
+
+  category   Category           @relation(fields: [categoryId], references: [id])
+  status     Status             @relation(fields: [statusId], references: [id])
+  campaign   Campaign?          @relation(fields: [campaignId], references: [id])
+  writer     User?              @relation("writer", fields: [writerId], references: [id])
+  designer   User?              @relation("designer", fields: [designerId], references: [id])
+  createdBy  User               @relation("creator", fields: [createdById], references: [id])
+  variants   PlatformVariant[]
+  approvals  Approval[]
+  comments   Comment[]
+  assetLinks ContentItemAsset[]
+
+  @@index([scheduledAt])
+  @@index([statusId])
+}
+
+model PlatformVariant {
+  id              String    @id @default(uuid())
+  contentItemId   String
+  platformId      Int
+  variantText     String    @default("") // فارغ = يُستخدم baseText
+  publishStatus   String    @default("none") // none|published|failed
+  externalPostUrl String?
+  publishedAt     DateTime?
+  publishedById   String? // موثِّق النشر اليدوي (مرحلة 1)
+  engagementNotes String?
+
+  item     ContentItem @relation(fields: [contentItemId], references: [id], onDelete: Cascade)
+  platform Platform    @relation(fields: [platformId], references: [id])
+
+  @@unique([contentItemId, platformId])
+}
+
+model Approval {
+  id            String    @id @default(uuid())
+  contentItemId String
+  level         Int       @default(1) // تجهيز للاعتماد متعدد المستويات
+  totalLevels   Int       @default(1)
+  requestedById String
+  reviewerId    String?
+  decision      String    @default("pending") // pending|approved|rejected
+  decisionNote  String?
+  requestedAt   DateTime  @default(now())
+  decidedAt     DateTime?
+
+  item        ContentItem @relation(fields: [contentItemId], references: [id], onDelete: Cascade)
+  requestedBy User        @relation("requester", fields: [requestedById], references: [id])
+  reviewer    User?       @relation("reviewer", fields: [reviewerId], references: [id])
+}
+
+model Comment {
+  id            String   @id @default(uuid())
+  contentItemId String
+  authorId      String
+  parentId      String?
+  body          String
+  mentions      String   @default("") // أسماء مستخدمين مفصولة بفواصل
+  anchor        String? // تعليق توضيحي (JSON نصي): مقطع نص أو نقطة تصميم
+  createdAt     DateTime @default(now())
+
+  item   ContentItem @relation(fields: [contentItemId], references: [id], onDelete: Cascade)
+  author User        @relation(fields: [authorId], references: [id])
+}
+
+model ActivityLog {
+  id         Int      @id @default(autoincrement())
+  actorId    String?
+  entityType String
+  entityId   String
+  action     String
+  detail     String   @default("")
+  createdAt  DateTime @default(now())
+
+  actor User? @relation(fields: [actorId], references: [id])
+
+  @@index([entityType, entityId])
+}
+
+model Campaign {
+  id        String        @id @default(uuid())
+  name      String
+  color     String        @default("#304F6D")
+  createdAt DateTime      @default(now())
+  items     ContentItem[]
+}
+
+model ContentTemplate {
+  id        String   @id @default(uuid())
+  name      String
+  baseText  String   @default("")
+  hashtags  String   @default("")
+  createdAt DateTime @default(now())
+}
+
+model Occasion {
+  id           String    @id @default(uuid())
+  nameAr       String
+  hijriMonth   Int? // مناسبة هجرية متكررة
+  hijriDay     Int?
+  gregMonth    Int? // مناسبة ميلادية متكررة
+  gregDay      Int?
+  specificDate DateTime? // مناسبة لمرة واحدة
+  color        String?
+}
