@@ -190,6 +190,26 @@ export async function createItem(formData: FormData) {
       variants: { create: (platformIds.length ? platformIds : [1]).map((pid) => ({ platformId: pid })) },
     },
   });
+
+  // صورة اختيارية مرفقة أثناء الإنشاء — تُرفع وتُربط بالبطاقة (فشلها لا يمنع إنشاء البطاقة)
+  const image = formData.get("image") as File | null;
+  if (image && image.size > 0) {
+    const saved = await saveUploadedFile(image);
+    if (!("error" in saved)) {
+      const asset = await db.mediaAsset.create({
+        data: {
+          name: (image.name || "صورة المنشور").slice(0, 120),
+          folder: "صور عامة",
+          tags: "منشور",
+          uploadedById: user.id,
+          versions: { create: { versionNo: 1, uploadedById: user.id, ...saved } },
+        },
+        include: { versions: true },
+      });
+      await db.contentItemAsset.create({ data: { contentItemId: item.id, assetVersionId: asset.versions[0].id, role: "attachment" } });
+    }
+  }
+
   await notify([writerId], user.id, "assigned", `أُسندت إليك بطاقة جديدة: «${title}»`, item.id);
   await log(user.id, item.id, "created", title);
   revalidateAll();
