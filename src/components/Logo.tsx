@@ -3,10 +3,12 @@ import fs from "fs";
 import path from "path";
 
 export default function Logo({ light = false, size = "md" }: { light?: boolean; size?: "md" | "lg" }) {
-  const hasOfficial = fs.existsSync(path.join(process.cwd(), "public", "brand", "logo.png"));
+  // نسخة فاتحة (كريمية) للخلفيات الداكنة، ونسخة كحلية للخلفيات الفاتحة
+  const file = light ? "logo-light.png" : "logo.png";
+  const hasOfficial = fs.existsSync(path.join(process.cwd(), "public", "brand", file));
   if (hasOfficial) {
     // eslint-disable-next-line @next/next/no-img-element
-    return <img src="/brand/logo.png" alt="تأصيل التعليمية" className={size === "lg" ? "h-16 w-auto" : "h-10 w-auto"} />;
+    return <img src={`/brand/${file}`} alt="تأصيل التعليمية" className={size === "lg" ? "h-16 w-auto" : "h-11 w-auto"} />;
   }
   return (
     <div className="flex items-center gap-2.5">

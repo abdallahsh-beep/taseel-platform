@@ -6,7 +6,7 @@ import type { SessionLite } from "@/lib/types";
 import { STATUS_COLORS } from "@/lib/types";
 import { STATUS, canApprove, canPublish, canEditText } from "@/lib/workflow";
 import { hijriFullLabel, gregLabel } from "@/lib/hijri";
-import { saveItemTexts, moveItem, approveItem, rejectItem, publishItem, addComment, linkAssetToItem, unlinkAssetFromItem, createShareLink, setItemCampaign, setItemLabels, createCampaign, saveTemplate, uploadCardImage, generateDraft } from "@/app/actions";
+import { saveItemTexts, moveItem, approveItem, rejectItem, publishItem, addComment, linkAssetToItem, unlinkAssetFromItem, createShareLink, setItemCampaign, setItemLabels, createCampaign, saveTemplate, uploadCardImage, generateDraft, deleteItem } from "@/app/actions";
 import PostPreview from "./PostPreview";
 import PlatformIcon from "./PlatformIcon";
 import EmojiPicker, { expandShortcodes } from "./EmojiPicker";
@@ -37,6 +37,7 @@ export default function CardModal({
   const [showReject, setShowReject] = useState(false);
   const [publishLinks, setPublishLinks] = useState<Record<string, string>>({});
   const [showPublish, setShowPublish] = useState(false);
+  const [showDelete, setShowDelete] = useState(false);
   const [msg, setMsg] = useState<{ kind: "ok" | "err"; text: string } | null>(null);
   const [showPicker, setShowPicker] = useState(false);
   const [pickerAssets, setPickerAssets] = useState<any[] | null>(null);
@@ -132,6 +133,16 @@ export default function CardModal({
   const canProduce = user.roles.some((r) => ["admin", "supervisor", "writer", "designer"].includes(r));
   const sendableFrom = canProduce && [STATUS.IDEA, STATUS.WRITING, STATUS.DESIGN].includes(item.statusId);
   const pendingApproval = item.approvals?.find((a: any) => a.decision === "pending");
+  // الحذف: المدير/المشرف لأي بطاقة، أو مُنشئ البطاقة لبطاقته
+  const canDelete = user.roles.some((r) => ["admin", "supervisor"].includes(r)) || item.createdById === user.id;
+
+  function handleDelete() {
+    startTransition(async () => {
+      const res = await deleteItem(item.id);
+      if (res?.error) setMsg({ kind: "err", text: res.error });
+      else { onClose(); router.refresh(); }
+    });
+  }
 
   return (
     <div className="fixed inset-0 z-50 flex items-start justify-center overflow-y-auto bg-navy-950/50 p-4" onClick={onClose}>
@@ -656,6 +667,34 @@ export default function CardModal({
                 </div>
               )}
             </div>
+
+            {/* حذف البطاقة */}
+            {canDelete && (
+              <div className="mt-4 rounded-xl border border-red-200 bg-red-50/40 p-4">
+                {!showDelete ? (
+                  <button
+                    onClick={() => setShowDelete(true)}
+                    className="flex items-center gap-1.5 text-sm font-bold text-red-700 hover:underline"
+                  >
+                    <Icon name="trash" size={15} /> حذف البطاقة
+                  </button>
+                ) : (
+                  <div className="flex flex-wrap items-center gap-2">
+                    <span className="text-sm font-bold text-red-700">تأكيد حذف البطاقة نهائياً؟ لا يمكن التراجع.</span>
+                    <button
+                      disabled={pending}
+                      onClick={handleDelete}
+                      className="rounded-lg bg-red-700 px-4 py-1.5 text-sm font-bold text-white disabled:opacity-60"
+                    >
+                      نعم، احذف
+                    </button>
+                    <button onClick={() => setShowDelete(false)} className="rounded-lg border border-steel-300 px-4 py-1.5 text-sm">
+                      إلغاء
+                    </button>
+                  </div>
+                )}
+              </div>
+            )}
 
             {/* سجل الاعتمادات */}
             {item.approvals?.length > 0 && (

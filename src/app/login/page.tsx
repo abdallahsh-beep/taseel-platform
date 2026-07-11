@@ -16,15 +16,11 @@ export default function LoginPage() {
   return (
     <main className="pattern-bg flex min-h-screen items-center justify-center bg-cream-50 p-4">
       <div className="w-full max-w-md">
-        {/* الشعار */}
-        <div className="mb-8 flex flex-col items-center gap-2">
-          <svg viewBox="0 0 40 40" className="h-16 w-16" aria-hidden>
-            <path d="M4 4h24l8 10v22H22L4 18V4z" fill="#1B3347" />
-            <path d="M10 30l10-10 10 10H10z" fill="#C1996B" />
-            <rect x="24" y="10" width="6" height="6" transform="rotate(45 27 13)" fill="#FBF6EF" />
-          </svg>
-          <h1 className="font-heading text-3xl font-black text-navy-900">روزنامة تأصيل</h1>
-          <p className="text-sm text-steel-500">منصة إدارة المحتوى — جمعية تأصيل التعليمية</p>
+        {/* الشعار الرسمي */}
+        <div className="mb-8 flex flex-col items-center gap-3">
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img src="/brand/logo.png" alt="تأصيل التعليمية" className="h-20 w-auto" />
+          <p className="text-sm text-steel-500">منصة إدارة المحتوى والروزنامة</p>
         </div>
 
         <form

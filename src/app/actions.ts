@@ -260,6 +260,22 @@ export async function saveItemTexts(
   return { ok: true, reverted: willRevert };
 }
 
+// ---------- حذف بطاقة ----------
+export async function deleteItem(itemId: string) {
+  const user = await getSessionUser();
+  if (!user) return { error: "غير مصرح" };
+  const item = await db.contentItem.findUnique({ where: { id: itemId } });
+  if (!item) return { error: "البطاقة غير موجودة" };
+  // المدير/المشرف يحذف أي بطاقة؛ غيره يحذف ما أنشأه فقط
+  const privileged = hasAnyRole(user.roles, ["admin", "supervisor"]);
+  if (!privileged && item.createdById !== user.id) return { error: "لا يمكنك حذف بطاقة لم تُنشئها" };
+  // الحذف يزيل المتغيرات والاعتمادات والتعليقات وروابط المرفقات تلقائياً (onDelete: Cascade)
+  await db.contentItem.delete({ where: { id: itemId } });
+  await log(user.id, itemId, "deleted", item.title);
+  revalidateAll();
+  return { ok: true };
+}
+
 // ---------- الاعتماد ----------
 export async function approveItem(itemId: string) {
   const user = await getSessionUser();
