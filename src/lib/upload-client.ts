@@ -18,15 +18,20 @@ export async function uploadFileDirect(
   if (file.size === 0) return { error: "الملف فارغ" };
   if (file.size > MAX_BYTES) return { error: "حجم الملف يتجاوز 20MB" };
 
-  const info = await createSignedUpload(file.type);
-  if ("error" in info) return info.error === "no-storage" ? null : { error: info.error };
+  try {
+    const info = await createSignedUpload(file.type);
+    if ("error" in info) return info.error === "no-storage" ? null : { error: info.error };
 
-  const put = await fetch(info.signedUrl, {
-    method: "PUT",
-    headers: { "content-type": file.type },
-    body: file,
-  });
-  if (!put.ok) return { error: `تعذّر رفع الملف (${put.status})` };
+    const put = await fetch(info.signedUrl, {
+      method: "PUT",
+      headers: { "content-type": file.type },
+      body: file,
+    });
+    if (!put.ok) return { error: `تعذّر رفع الملف (${put.status})` };
 
-  return { filePath: info.publicUrl, mimeType: file.type, sizeBytes: file.size, name: file.name.slice(0, 120) };
+    return { filePath: info.publicUrl, mimeType: file.type, sizeBytes: file.size, name: file.name.slice(0, 120) };
+  } catch (e) {
+    const msg = e instanceof Error ? e.message : "";
+    return { error: msg ? `تعذّر رفع الملف: ${msg}` : "تعذّر رفع الملف" };
+  }
 }
