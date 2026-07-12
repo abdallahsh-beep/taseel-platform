@@ -3,13 +3,6 @@
 import { useActionState } from "react";
 import { login } from "../actions";
 
-const DEMO_ACCOUNTS = [
-  { label: "سفر الدغيري — مدير ومشرف", email: "safar@taseel.org.sa" },
-  { label: "عبدالله شرف الدين — مصمم وكاتب", email: "abdullah.sharaf@taseel.org.sa" },
-  { label: "المنذر الحميدان — منتج وكاتب", email: "almunther@taseel.org.sa" },
-  { label: "عبدالله الدبيخي — مسؤول النشر", email: "abdullah.aldubaikhi@taseel.org.sa" },
-];
-
 export default function LoginPage() {
   const [state, action, pending] = useActionState(login, undefined);
 
@@ -33,7 +26,7 @@ export default function LoginPage() {
             type="email"
             required
             dir="ltr"
-            defaultValue="safar@taseel.org.sa"
+            placeholder="name@taseel.org.sa"
             className="mb-4 w-full rounded-lg border border-steel-300 bg-cream-50 px-3 py-2.5 text-left outline-none focus:border-navy-700 focus:ring-2 focus:ring-navy-700/20"
           />
           <label className="mb-1.5 block text-sm font-bold text-navy-900">كلمة المرور</label>
@@ -42,7 +35,6 @@ export default function LoginPage() {
             type="password"
             required
             dir="ltr"
-            defaultValue="Taseel@2026"
             className="mb-5 w-full rounded-lg border border-steel-300 bg-cream-50 px-3 py-2.5 text-left outline-none focus:border-navy-700 focus:ring-2 focus:ring-navy-700/20"
           />
           {state?.error && (
@@ -55,18 +47,6 @@ export default function LoginPage() {
             {pending ? "جارٍ الدخول..." : "دخول"}
           </button>
         </form>
-
-        <div className="mt-6 rounded-xl border border-sand-300/50 bg-sand-100/50 p-4 text-sm">
-          <p className="mb-2 font-bold text-navy-900">حسابات تجريبية (كلمة المرور الموحدة: Taseel@2026)</p>
-          <ul className="grid grid-cols-1 gap-1 text-steel-500">
-            {DEMO_ACCOUNTS.map((a) => (
-              <li key={a.email} className="flex justify-between gap-2">
-                <span>{a.label}</span>
-                <span dir="ltr" className="font-mono text-xs">{a.email}</span>
-              </li>
-            ))}
-          </ul>
-        </div>
       </div>
     </main>
   );
