@@ -49,6 +49,22 @@ function cleanLabels(raw: string): string {
   return parts.slice(0, 8).join(",");
 }
 
+// تحقّق أن النص رابط http/https صالح
+function isHttpUrl(value: string): boolean {
+  try {
+    const u = new URL(value);
+    return u.protocol === "http:" || u.protocol === "https:";
+  } catch {
+    return false;
+  }
+}
+
+// تنقية رابط فيديو اختياري: يعيد الرابط الصالح أو "" (لا يُفشل الإنشاء على رابط خاطئ)
+function cleanVideoUrl(raw: string): string {
+  const t = raw.trim();
+  return t && t.length <= 2048 && isHttpUrl(t) ? t : "";
+}
+
 // يبني لحظة UTC صحيحة من تاريخ ووقت بتوقيت الرياض (UTC+3) — مستقل عن توقيت الخادم
 function riyadhDate(date: string, time: string): Date | null {
   if (!/^\d{4}-\d{2}-\d{2}$/.test(date)) return null;
@@ -184,6 +200,7 @@ export async function createItem(formData: FormData) {
       categoryId,
       campaignId,
       labels,
+      videoUrl: cleanVideoUrl(String(formData.get("videoUrl") ?? "")),
       statusId: STATUS.IDEA,
       scheduledAt: when,
       createdById: user.id,
@@ -807,6 +824,24 @@ export async function setItemLabels(itemId: string, labels: string) {
   if ("error" in guard) return guard;
   await db.contentItem.update({ where: { id: itemId }, data: { labels: cleanLabels(labels) } });
   await log(user.id, itemId, "labels_set", labels);
+  revalidateAll();
+  return { ok: true };
+}
+
+// رابط فيديو خارجي (بديل رفع المقاطع الثقيلة) — يوتيوب/درايف/فيميو…
+export async function setItemVideoUrl(itemId: string, url: string) {
+  const user = await getSessionUser();
+  if (!user) return { error: "غير مصرح" };
+  if (!canEditText(user.roles)) return { error: "دورك لا يملك تعديل البطاقة" };
+  const guard = await editableItemOrError(itemId, user.roles, user.id);
+  if ("error" in guard) return guard;
+  const trimmed = url.trim();
+  if (trimmed) {
+    if (trimmed.length > 2048) return { error: "الرابط طويل جداً" };
+    if (!isHttpUrl(trimmed)) return { error: "رابط غير صالح — الصق رابطاً كاملاً يبدأ بـ https://" };
+  }
+  await db.contentItem.update({ where: { id: itemId }, data: { videoUrl: trimmed } });
+  await log(user.id, itemId, "video_set", trimmed || "أُزيل رابط الفيديو");
   revalidateAll();
   return { ok: true };
 }

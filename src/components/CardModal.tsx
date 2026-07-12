@@ -6,7 +6,7 @@ import type { SessionLite } from "@/lib/types";
 import { STATUS_COLORS } from "@/lib/types";
 import { STATUS, canApprove, canPublish, canEditText } from "@/lib/workflow";
 import { hijriFullLabel, gregLabel } from "@/lib/hijri";
-import { saveItemTexts, moveItem, approveItem, rejectItem, publishItem, addComment, linkAssetToItem, unlinkAssetFromItem, createShareLink, setItemCampaign, setItemLabels, createCampaign, saveTemplate, uploadCardImage, generateDraft, deleteItem } from "@/app/actions";
+import { saveItemTexts, moveItem, approveItem, rejectItem, publishItem, addComment, linkAssetToItem, unlinkAssetFromItem, createShareLink, setItemCampaign, setItemLabels, setItemVideoUrl, createCampaign, saveTemplate, uploadCardImage, generateDraft, deleteItem } from "@/app/actions";
 import { uploadFileDirect } from "@/lib/upload-client";
 import PostPreview from "./PostPreview";
 import PlatformIcon from "./PlatformIcon";
@@ -51,6 +51,7 @@ export default function CardModal({
   const [templates, setTemplates] = useState<any[]>([]);
   const [campaignId, setCampaignId] = useState<string>("");
   const [labels, setLabels] = useState<string>("");
+  const [videoUrl, setVideoUrl] = useState<string>("");
   const [newCampaign, setNewCampaign] = useState("");
   const [showNewCampaign, setShowNewCampaign] = useState(false);
   const [aiOpen, setAiOpen] = useState(false);
@@ -82,6 +83,7 @@ export default function CardModal({
       setHashtags(data.hashtags);
       setCampaignId(data.campaignId ?? "");
       setLabels(data.labels ?? "");
+      setVideoUrl(data.videoUrl ?? "");
       const vt: Record<string, string> = {};
       for (const v of data.variants) vt[v.id] = v.variantText;
       setVariantTexts(vt);
@@ -314,6 +316,42 @@ export default function CardModal({
                       }
                     }}
                   />
+                )}
+              </div>
+
+              {/* رابط فيديو خارجي — بديل رفع المقاطع الثقيلة (يبقى التخزين للصور) */}
+              <div className="mt-3 border-t border-sand-200 pt-3">
+                <div className="mb-1.5 flex items-center gap-1 text-xs font-bold text-steel-500">
+                  <Icon name="link" size={13} /> رابط فيديو (يوتيوب/درايف — بديل رفع المقاطع)
+                </div>
+                {videoUrl.trim() && (
+                  <a
+                    href={videoUrl}
+                    target="_blank"
+                    rel="noreferrer"
+                    className="mb-2 inline-flex max-w-full items-center gap-1.5 rounded-lg bg-navy-700 px-3 py-1.5 text-xs font-bold text-cream-50 hover:bg-navy-900"
+                  >
+                    <Icon name="link" size={13} /> <span className="truncate" dir="ltr">فتح الفيديو</span>
+                  </a>
+                )}
+                {editable && (
+                  <div className="flex gap-1.5">
+                    <input
+                      value={videoUrl}
+                      onChange={(e) => setVideoUrl(e.target.value)}
+                      dir="ltr"
+                      placeholder="https://youtube.com/…"
+                      className="min-w-0 flex-1 rounded-lg border border-steel-300 px-2 py-1.5 text-left text-xs outline-none focus:border-navy-700"
+                    />
+                    <button
+                      type="button"
+                      disabled={pending}
+                      onClick={() => run(() => setItemVideoUrl(item.id, videoUrl), videoUrl.trim() ? "حُفظ رابط الفيديو" : "أُزيل رابط الفيديو")}
+                      className="shrink-0 rounded-lg bg-navy-700 px-3 py-1.5 text-xs font-bold text-cream-50 hover:bg-navy-900 disabled:opacity-60"
+                    >
+                      حفظ
+                    </button>
+                  </div>
                 )}
               </div>
             </div>

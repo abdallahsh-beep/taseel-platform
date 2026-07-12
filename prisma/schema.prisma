@@ -142,6 +142,7 @@ model ContentItem {
   baseText       String    @default("")
   hashtags       String    @default("") // مفصولة بمسافات
   referenceLinks String    @default("") // سطر لكل رابط
+  videoUrl       String    @default("") // رابط فيديو خارجي (يوتيوب/درايف) — بديل تخزين المقاطع
   labels         String    @default("") // وسوم حرة مفصولة بفواصل (Planable Labels)
   campaignId     String?
   categoryId     String

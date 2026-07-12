@@ -344,6 +344,15 @@ function NewItemDialog({
           className="mb-3 w-full rounded-lg border border-steel-300 px-3 py-2 text-sm file:mr-3 file:cursor-pointer file:rounded file:border-0 file:bg-navy-700 file:px-3 file:py-1 file:text-cream-50"
         />
 
+        <label className="mb-1 block text-sm font-bold">رابط فيديو (اختياري)</label>
+        <input
+          name="videoUrl"
+          type="url"
+          dir="ltr"
+          placeholder="https://youtube.com/…"
+          className="mb-3 w-full rounded-lg border border-steel-300 px-3 py-2 text-left outline-none focus:border-navy-700"
+        />
+
         <div className="mb-3 grid grid-cols-2 gap-3">
           <div>
             <label className="mb-1 block text-sm font-bold">الحملة</label>
