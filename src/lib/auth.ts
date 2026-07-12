@@ -1,4 +1,5 @@
 import { cookies } from "next/headers";
+import { cache } from "react";
 import crypto from "crypto";
 import { db } from "./db";
 
@@ -81,7 +82,9 @@ export type SessionUser = {
   isActive: boolean;
 };
 
-export async function getSessionUser(): Promise<SessionUser | null> {
+// مغلّف بـ cache() لإزالة الازدواج داخل الطلب الواحد: التخطيط والصفحة يستدعيانه معاً،
+// فيتشاركان استعلام المستخدم نفسه بدل تكراره (round-trip واحد بدل اثنين لكل تنقّل).
+export const getSessionUser = cache(async (): Promise<SessionUser | null> => {
   const store = await cookies();
   const uid = decodeSession(store.get(COOKIE)?.value);
   if (!uid) return null;
@@ -95,4 +98,4 @@ export async function getSessionUser(): Promise<SessionUser | null> {
     jobTitle: user.jobTitle,
     isActive: user.isActive,
   };
-}
+});

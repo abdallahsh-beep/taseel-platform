@@ -32,13 +32,14 @@ async function notify(userIds: (string | null | undefined)[], actorId: string, t
 async function approverIds() {
   const approvers = await db.user.findMany({
     where: { isActive: true, OR: [{ roles: { contains: "admin" } }, { roles: { contains: "supervisor" } }] },
+    select: { id: true },
   });
   return approvers.map((a) => a.id);
 }
 
 /** معرّفات المستخدمين النشطين الذين يحملون دوراً معيناً (للإسناد الاحتياطي عند غياب مُسند محدد) */
 async function roleUserIds(role: string) {
-  const users = await db.user.findMany({ where: { isActive: true, roles: { contains: role } } });
+  const users = await db.user.findMany({ where: { isActive: true, roles: { contains: role } }, select: { id: true } });
   return users.map((u) => u.id);
 }
 
@@ -84,7 +85,7 @@ export async function logout() {
 export async function moveItem(itemId: string, toStatusId: number) {
   const user = await getSessionUser();
   if (!user) return { error: "غير مصرح" };
-  const item = await db.contentItem.findUnique({ where: { id: itemId }, include: { status: true } });
+  const item = await db.contentItem.findUnique({ where: { id: itemId } });
   if (!item) return { error: "البطاقة غير موجودة" };
 
   const t = findTransition(item.statusId, toStatusId);
@@ -166,14 +167,14 @@ export async function createItem(formData: FormData) {
   const when = riyadhDate(date, time);
   if (!when) return { error: "تاريخ أو وقت غير صالح" };
 
-  // الحملة والوسوم (اختياريان) — نتحقق من وجود الحملة قبل الربط
+  // الحملة والوسوم (اختياريان) — نجلب الحملة والكاتب الافتراضي بالتوازي وبعمود id فقط
   const rawCampaignId = String(formData.get("campaignId") ?? "").trim();
-  const campaignId = rawCampaignId
-    ? (await db.campaign.findUnique({ where: { id: rawCampaignId } }))?.id ?? null
-    : null;
   const labels = cleanLabels(String(formData.get("labels") ?? ""));
-
-  const writer = await db.user.findFirst({ where: { roles: { contains: "writer" }, isActive: true } });
+  const [campaign, writer] = await Promise.all([
+    rawCampaignId ? db.campaign.findUnique({ where: { id: rawCampaignId }, select: { id: true } }) : Promise.resolve(null),
+    db.user.findFirst({ where: { roles: { contains: "writer" }, isActive: true }, select: { id: true } }),
+  ]);
+  const campaignId = campaign?.id ?? null;
   const writerId = user.roles.includes("writer") ? user.id : writer?.id;
   const item = await db.contentItem.create({
     data: {
@@ -244,12 +245,12 @@ export async function saveItemTexts(
     },
   });
   // نحدّث فقط النسخ التابعة لهذه البطاقة — لا نثق بمعرّفات العميل (يمنع IDOR على بطاقات أخرى)
+  // ونجمعها في معاملة واحدة بدل استعلام لكل منصة (round-trip واحد بدل N)
   const ownVariantIds = new Set(item.variants.map((v) => v.id));
-  for (const v of data.variants) {
-    if (ownVariantIds.has(v.id)) {
-      await db.platformVariant.update({ where: { id: v.id }, data: { variantText: v.text } });
-    }
-  }
+  const variantUpdates = data.variants
+    .filter((v) => ownVariantIds.has(v.id))
+    .map((v) => db.platformVariant.update({ where: { id: v.id }, data: { variantText: v.text } }));
+  if (variantUpdates.length) await db.$transaction(variantUpdates);
   if (willRevert) {
     await db.approval.create({ data: { contentItemId: itemId, requestedById: user.id } });
     await notify(await approverIds(), user.id, "approval_requested", `تعديل بعد الاعتماد على «${item.title}» — تحتاج إعادة اعتماد`, itemId);
@@ -350,18 +351,17 @@ export async function publishItem(itemId: string, links: { variantId: string; ur
     if (!link?.url.trim()) return { error: "رابط المنشور مطلوب لكل منصة مستهدفة" };
     updates.push({ variantId: v.id, url: link.url.trim() });
   }
-  for (const u of updates) {
-    await db.platformVariant.update({
-      where: { id: u.variantId },
-      data: {
-        publishStatus: "published",
-        externalPostUrl: u.url,
-        publishedAt: new Date(),
-        publishedById: user.id,
-      },
-    });
-  }
-  await db.contentItem.update({ where: { id: itemId }, data: { statusId: STATUS.PUBLISHED } });
+  // تحديث كل النسخ + حالة البطاقة في معاملة واحدة (ذرّية + round-trip واحد بدل N+1)
+  const now = new Date();
+  await db.$transaction([
+    ...updates.map((u) =>
+      db.platformVariant.update({
+        where: { id: u.variantId },
+        data: { publishStatus: "published", externalPostUrl: u.url, publishedAt: now, publishedById: user.id },
+      }),
+    ),
+    db.contentItem.update({ where: { id: itemId }, data: { statusId: STATUS.PUBLISHED } }),
+  ]);
   await notify([item.writerId, item.createdById], user.id, "published", `نُشرت بطاقة «${item.title}» ووُثقت روابطها`, itemId);
   await log(user.id, itemId, "published", `${links.length} منصة`);
   revalidateAll();
@@ -389,7 +389,7 @@ export async function addComment(itemId: string, body: string, anchor?: string) 
 
   // إشعار المذكورين بـ @ (مطابقة بأول الاسم) + كاتب البطاقة
   const mentioned = mentionNames.length
-    ? await db.user.findMany({ where: { OR: mentionNames.map((n) => ({ name: { startsWith: n } })), isActive: true } })
+    ? await db.user.findMany({ where: { OR: mentionNames.map((n) => ({ name: { startsWith: n } })), isActive: true }, select: { id: true } })
     : [];
   await notify(
     [...mentioned.map((m) => m.id), item.writerId],
@@ -702,11 +702,15 @@ export async function importCsv(formData: FormData) {
   if (rows.length < 2) return { error: "لا صفوف بيانات (السطر الأول عناوين الأعمدة)" };
   if (rows.length > 501) return { error: "الحد الأقصى 500 صف في الاستيراد الواحد — قسّم الملف" };
 
-  const categories = await db.category.findMany();
-  const writer = await db.user.findFirst({ where: { roles: { contains: "writer" }, isActive: true } });
+  const [categories, writer] = await Promise.all([
+    db.category.findMany(),
+    db.user.findFirst({ where: { roles: { contains: "writer" }, isActive: true }, select: { id: true } }),
+  ]);
   const errors: string[] = [];
   let created = 0;
 
+  // 1) نتحقّق من كل الصفوف أولاً ونبني قائمة الإنشاء (نجمع أخطاء التحقق دون إيقاف البقية)
+  const toCreate: { rowNo: number; title: string; baseText: string; categoryId: string; when: Date; platformIds: number[] }[] = [];
   for (let r = 1; r < rows.length; r++) {
     const [title, date, time, catName, platformsRaw, baseText] = rows[r].map((c) => (c ?? "").trim());
     if (!title) { errors.push(`صف ${r + 1}: العنوان فارغ`); continue; }
@@ -717,24 +721,41 @@ export async function importCsv(formData: FormData) {
     const platformIds = [...new Set(
       (platformsRaw || "x").split(/[;|،]/).map((p) => PLATFORM_NAME_TO_ID[p.trim().toLowerCase()] ?? PLATFORM_NAME_TO_ID[p.trim()]).filter(Boolean),
     )];
-    try {
-      const item = await db.contentItem.create({
-        data: {
-          title,
-          baseText: baseText ?? "",
-          categoryId: cat.id,
-          statusId: STATUS.IDEA,
-          scheduledAt: when,
-          createdById: user.id,
-          writerId: writer?.id,
-          variants: { create: (platformIds.length ? platformIds : [1]).map((pid) => ({ platformId: pid })) },
-        },
-      });
-      await log(user.id, item.id, "created", `${title} (مستورد)`);
-      created++;
-    } catch {
-      errors.push(`صف ${r + 1}: تعذّر إنشاء البطاقة`);
-    }
+    toCreate.push({ rowNo: r + 1, title, baseText: baseText ?? "", categoryId: cat.id, when, platformIds });
+  }
+
+  // 2) ننشئ البطاقات في دفعات متزامنة محدودة (بدل استعلام متسلسل لكل صف) مع الإبقاء على النجاح الجزئي
+  const createdItems: { id: string; title: string }[] = [];
+  const CHUNK = 25;
+  for (let i = 0; i < toCreate.length; i += CHUNK) {
+    const slice = toCreate.slice(i, i + CHUNK);
+    const results = await Promise.allSettled(
+      slice.map((x) =>
+        db.contentItem.create({
+          data: {
+            title: x.title,
+            baseText: x.baseText,
+            categoryId: x.categoryId,
+            statusId: STATUS.IDEA,
+            scheduledAt: x.when,
+            createdById: user.id,
+            writerId: writer?.id,
+            variants: { create: (x.platformIds.length ? x.platformIds : [1]).map((pid) => ({ platformId: pid })) },
+          },
+        }),
+      ),
+    );
+    results.forEach((res, j) => {
+      if (res.status === "fulfilled") { createdItems.push({ id: res.value.id, title: slice[j].title }); created++; }
+      else errors.push(`صف ${slice[j].rowNo}: تعذّر إنشاء البطاقة`);
+    });
+  }
+
+  // 3) نسجّل النشاط دفعة واحدة بدل INSERT لكل صف
+  if (createdItems.length) {
+    await db.activityLog.createMany({
+      data: createdItems.map((it) => ({ actorId: user.id, entityType: "content_item", entityId: it.id, action: "created", detail: `${it.title} (مستورد)` })),
+    });
   }
   revalidateAll();
   return { ok: true, created, errors };

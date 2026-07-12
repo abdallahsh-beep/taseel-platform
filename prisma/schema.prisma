@@ -45,6 +45,7 @@ model Notification {
   user User @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@index([userId, readAt])
+  @@index([userId, createdAt])
 }
 
 model MediaAsset {
@@ -58,6 +59,8 @@ model MediaAsset {
 
   uploadedBy User           @relation(fields: [uploadedById], references: [id])
   versions   AssetVersion[]
+
+  @@index([updatedAt])
 }
 
 model AssetVersion {
@@ -87,6 +90,7 @@ model ContentItemAsset {
   version AssetVersion @relation(fields: [assetVersionId], references: [id], onDelete: Cascade)
 
   @@id([contentItemId, assetVersionId])
+  @@index([assetVersionId])
 }
 
 model ShareLink {
@@ -164,8 +168,10 @@ model ContentItem {
   comments   Comment[]
   assetLinks ContentItemAsset[]
 
-  @@index([scheduledAt])
-  @@index([statusId])
+  // فهارس مركّبة تغطي مسارات القوائم الساخنة (كل الاستعلامات ترشّح deletedAt=null):
+  // الأولى للروزنامة/الكانبان (ترتيب زمني)، الثانية لصفحات الحالة (بانتظار/جاهز) واللوحة.
+  @@index([deletedAt, scheduledAt])
+  @@index([deletedAt, statusId, scheduledAt])
 }
 
 model PlatformVariant {
@@ -183,6 +189,7 @@ model PlatformVariant {
   platform Platform    @relation(fields: [platformId], references: [id])
 
   @@unique([contentItemId, platformId])
+  @@index([platformId])
 }
 
 model Approval {
@@ -200,6 +207,8 @@ model Approval {
   item        ContentItem @relation(fields: [contentItemId], references: [id], onDelete: Cascade)
   requestedBy User        @relation("requester", fields: [requestedById], references: [id])
   reviewer    User?       @relation("reviewer", fields: [reviewerId], references: [id])
+
+  @@index([contentItemId])
 }
 
 model Comment {
@@ -214,6 +223,8 @@ model Comment {
 
   item   ContentItem @relation(fields: [contentItemId], references: [id], onDelete: Cascade)
   author User        @relation(fields: [authorId], references: [id])
+
+  @@index([contentItemId])
 }
 
 model ActivityLog {
@@ -228,6 +239,7 @@ model ActivityLog {
   actor User? @relation(fields: [actorId], references: [id])
 
   @@index([entityType, entityId])
+  @@index([createdAt])
 }
 
 model Campaign {
