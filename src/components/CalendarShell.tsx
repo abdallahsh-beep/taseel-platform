@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import type { ItemLite, OccasionLite, CategoryLite, SessionLite } from "@/lib/types";
 import { GREG_MONTHS_AR } from "@/lib/hijri";
 import { rescheduleItem, createItem, createShareLink } from "@/app/actions";
+import { uploadFileDirect } from "@/lib/upload-client";
 import { canCreate, canReschedule } from "@/lib/workflow";
 import MonthGrid from "./views/MonthGrid";
 import QuarterGrid from "./views/QuarterGrid";
@@ -283,6 +284,14 @@ function NewItemDialog({
 
   function submit(formData: FormData) {
     startTransition(async () => {
+      // نرفع الصورة مباشرةً للتخزين أولاً (يتجاوز حد جسم الطلب)، ثم نمرّر رابطها فقط للإجراء
+      const file = formData.get("image") as File | null;
+      if (file && file.size > 0) {
+        const up = await uploadFileDirect(file);
+        if (up && "error" in up) { onError(up.error); return; }
+        if (up) { formData.delete("image"); formData.set("imageMeta", JSON.stringify(up)); }
+        // up === null → لا تخزين (تطوير محلي): نُبقي الملف في الطلب كما هو
+      }
       const res = await createItem(formData);
       if (res?.error) onError(res.error);
       else {

@@ -7,6 +7,7 @@ import { STATUS_COLORS } from "@/lib/types";
 import { STATUS, canApprove, canPublish, canEditText } from "@/lib/workflow";
 import { hijriFullLabel, gregLabel } from "@/lib/hijri";
 import { saveItemTexts, moveItem, approveItem, rejectItem, publishItem, addComment, linkAssetToItem, unlinkAssetFromItem, createShareLink, setItemCampaign, setItemLabels, createCampaign, saveTemplate, uploadCardImage, generateDraft, deleteItem } from "@/app/actions";
+import { uploadFileDirect } from "@/lib/upload-client";
 import PostPreview from "./PostPreview";
 import PlatformIcon from "./PlatformIcon";
 import EmojiPicker, { expandShortcodes } from "./EmojiPicker";
@@ -533,10 +534,16 @@ export default function CardModal({
                       onChange={(e) => {
                         const f = e.target.files?.[0];
                         if (!f) return;
-                        const fd = new FormData();
-                        fd.append("file", f);
-                        run(() => uploadCardImage(item.id, fd), "رُفعت الصورة ورُبطت بالبطاقة");
                         e.target.value = "";
+                        // نرفع الصورة مباشرةً للتخزين أولاً (يتجاوز حد جسم الطلب)، ثم نمرّر رابطها للإجراء
+                        run(async () => {
+                          const fd = new FormData();
+                          const up = await uploadFileDirect(f);
+                          if (up && "error" in up) return { error: up.error };
+                          if (up) fd.set("fileMeta", JSON.stringify(up));
+                          else fd.set("file", f); // لا تخزين (تطوير محلي): نرسل الملف
+                          return uploadCardImage(item.id, fd);
+                        }, "رُفعت الصورة ورُبطت بالبطاقة");
                       }}
                     />
                   </div>

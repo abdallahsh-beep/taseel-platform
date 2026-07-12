@@ -5,7 +5,7 @@ import { revalidatePath } from "next/cache";
 import bcrypt from "bcryptjs";
 import crypto from "crypto";
 import { db } from "@/lib/db";
-import { storeFile } from "@/lib/storage";
+import { storeFile, createSignedUploadUrl, isOwnStorageUrl, usingSupabaseStorage } from "@/lib/storage";
 import { getSessionUser, setSessionCookie, clearSessionCookie, hasAnyRole } from "@/lib/auth";
 import { STATUS, findTransition, canApprove, canPublish, canEditText, canCreate, canReschedule } from "@/lib/workflow";
 
@@ -191,23 +191,23 @@ export async function createItem(formData: FormData) {
     },
   });
 
-  // صورة اختيارية مرفقة أثناء الإنشاء — تُرفع وتُربط بالبطاقة (فشلها لا يمنع إنشاء البطاقة)
-  const image = formData.get("image") as File | null;
-  if (image && image.size > 0) {
-    const saved = await saveUploadedFile(image);
-    if (!("error" in saved)) {
-      const asset = await db.mediaAsset.create({
-        data: {
-          name: (image.name || "صورة المنشور").slice(0, 120),
-          folder: "صور عامة",
-          tags: "منشور",
-          uploadedById: user.id,
-          versions: { create: { versionNo: 1, uploadedById: user.id, ...saved } },
+  // صورة اختيارية مرفقة أثناء الإنشاء — رُفعت مسبقاً مباشرةً للتخزين (imageMeta) أو كملف محلياً (image)؛
+  // فشلها لا يمنع إنشاء البطاقة
+  const saved = await resolveUpload(formData, "image");
+  if (saved && !("error" in saved)) {
+    const asset = await db.mediaAsset.create({
+      data: {
+        name: (saved.name || "صورة المنشور").slice(0, 120),
+        folder: "صور عامة",
+        tags: "منشور",
+        uploadedById: user.id,
+        versions: {
+          create: { versionNo: 1, uploadedById: user.id, filePath: saved.filePath, mimeType: saved.mimeType, sizeBytes: saved.sizeBytes },
         },
-        include: { versions: true },
-      });
-      await db.contentItemAsset.create({ data: { contentItemId: item.id, assetVersionId: asset.versions[0].id, role: "attachment" } });
-    }
+      },
+      include: { versions: true },
+    });
+    await db.contentItemAsset.create({ data: { contentItemId: item.id, assetVersionId: asset.versions[0].id, role: "attachment" } });
   }
 
   await notify([writerId], user.id, "assigned", `أُسندت إليك بطاقة جديدة: «${title}»`, item.id);
@@ -441,18 +441,77 @@ async function saveUploadedFile(file: File): Promise<{ filePath: string; mimeTyp
   }
 }
 
+type StoredFile = { filePath: string; mimeType: string; sizeBytes: number; name: string };
+
+/**
+ * يُصدر رابط رفع موقّعاً للمتصفح ليرفع الملف مباشرةً إلى التخزين — يتجاوز حد جسم الطلب على Vercel.
+ * يعيد { error: "no-storage" } محلياً (بلا Supabase) إشارةً للعميل ليسقط لإرسال الملف في الطلب.
+ */
+export async function createSignedUpload(
+  mimeType: string,
+): Promise<{ error: string } | { signedUrl: string; publicUrl: string }> {
+  const user = await getSessionUser();
+  if (!user) return { error: "غير مصرح" };
+  if (!usingSupabaseStorage) return { error: "no-storage" };
+  const ext = MIME_EXT[mimeType];
+  if (!ext) return { error: "نوع الملف غير مدعوم (المسموح: صور PNG/JPG/WebP/GIF، PDF، MP4)" };
+  const path = `uploads/${crypto.randomUUID()}.${ext}`;
+  const res = await createSignedUploadUrl(path);
+  if ("error" in res) return { error: res.error };
+  return { signedUrl: res.signedUrl, publicUrl: res.publicUrl };
+}
+
+/**
+ * يحلّ مصدر الملف لأي إجراء رفع:
+ * - إن وُجد حقل `${field}Meta` (رُفع مسبقاً مباشرةً للتخزين) → نستخدمه بعد التحقق منه.
+ * - وإلا إن وُجد ملف في الطلب باسم `field` (احتياطي تطوير محلي) → نحفظه عبر saveUploadedFile.
+ * - وإلا → null (لا ملف).
+ */
+async function resolveUpload(
+  formData: FormData,
+  field: string,
+): Promise<StoredFile | { error: string } | null> {
+  const metaRaw = String(formData.get(`${field}Meta`) ?? "");
+  if (metaRaw) {
+    try {
+      const m = JSON.parse(metaRaw);
+      if (
+        typeof m?.filePath === "string" &&
+        typeof m?.mimeType === "string" &&
+        typeof m?.sizeBytes === "number" &&
+        MIME_EXT[m.mimeType] &&
+        m.sizeBytes > 0 &&
+        m.sizeBytes <= UPLOAD_MAX_BYTES &&
+        isOwnStorageUrl(m.filePath)
+      ) {
+        return {
+          filePath: m.filePath,
+          mimeType: m.mimeType,
+          sizeBytes: m.sizeBytes,
+          name: (typeof m.name === "string" ? m.name : "").slice(0, 120),
+        };
+      }
+    } catch {}
+    return { error: "بيانات الملف غير صالحة" };
+  }
+  const file = formData.get(field) as File | null;
+  if (!file || file.size === 0) return null;
+  const r = await saveUploadedFile(file);
+  if ("error" in r) return r;
+  return { ...r, name: (file.name || "").slice(0, 120) };
+}
+
 export async function uploadAsset(formData: FormData) {
   const user = await getSessionUser();
   if (!user) return { error: "غير مصرح" };
   if (!canUploadMedia(user.roles)) return { error: "دورك لا يملك رفع ملفات للمكتبة" };
 
-  const file = formData.get("file") as File;
-  const name = String(formData.get("name") ?? "").trim() || (file?.name ?? "ملف");
+  const saved = await resolveUpload(formData, "file");
+  if (!saved) return { error: "لم يُرفق ملف" };
+  if ("error" in saved) return saved;
+  const name = String(formData.get("name") ?? "").trim() || saved.name || "ملف";
   const folder = String(formData.get("folder") ?? "عام");
   const tags = String(formData.get("tags") ?? "").trim();
-
-  const saved = await saveUploadedFile(file);
-  if ("error" in saved) return saved;
 
   const asset = await db.mediaAsset.create({
     data: {
@@ -460,7 +519,9 @@ export async function uploadAsset(formData: FormData) {
       folder,
       tags,
       uploadedById: user.id,
-      versions: { create: { versionNo: 1, uploadedById: user.id, ...saved } },
+      versions: {
+        create: { versionNo: 1, uploadedById: user.id, filePath: saved.filePath, mimeType: saved.mimeType, sizeBytes: saved.sizeBytes },
+      },
     },
   });
   await db.activityLog.create({
@@ -478,12 +539,21 @@ export async function uploadAssetVersion(assetId: string, formData: FormData) {
   const asset = await db.mediaAsset.findUnique({ where: { id: assetId }, include: { versions: { orderBy: { versionNo: "desc" }, take: 1 } } });
   if (!asset) return { error: "الأصل غير موجود" };
 
-  const saved = await saveUploadedFile(formData.get("file") as File);
+  const saved = await resolveUpload(formData, "file");
+  if (!saved) return { error: "لم يُرفق ملف" };
   if ("error" in saved) return saved;
 
   const note = String(formData.get("note") ?? "").trim();
   await db.assetVersion.create({
-    data: { assetId, versionNo: (asset.versions[0]?.versionNo ?? 0) + 1, uploadedById: user.id, note, ...saved },
+    data: {
+      assetId,
+      versionNo: (asset.versions[0]?.versionNo ?? 0) + 1,
+      uploadedById: user.id,
+      note,
+      filePath: saved.filePath,
+      mimeType: saved.mimeType,
+      sizeBytes: saved.sizeBytes,
+    },
   });
   await db.activityLog.create({
     data: { actorId: user.id, entityType: "media_asset", entityId: assetId, action: "asset_version_added", detail: `${asset.name} — ${note}` },
@@ -753,17 +823,19 @@ export async function uploadCardImage(itemId: string, formData: FormData) {
   if ("error" in guard) return guard;
   const item = guard.item;
 
-  const file = formData.get("file") as File;
-  const saved = await saveUploadedFile(file);
+  const saved = await resolveUpload(formData, "file");
+  if (!saved) return { error: "لم يُرفق ملف" };
   if ("error" in saved) return saved;
 
   const asset = await db.mediaAsset.create({
     data: {
-      name: (file?.name || "صورة المنشور").slice(0, 120),
+      name: (saved.name || "صورة المنشور").slice(0, 120),
       folder: "صور عامة",
       tags: "منشور",
       uploadedById: user.id,
-      versions: { create: { versionNo: 1, uploadedById: user.id, ...saved } },
+      versions: {
+        create: { versionNo: 1, uploadedById: user.id, filePath: saved.filePath, mimeType: saved.mimeType, sizeBytes: saved.sizeBytes },
+      },
     },
     include: { versions: true },
   });

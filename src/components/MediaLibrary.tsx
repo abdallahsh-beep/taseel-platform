@@ -5,6 +5,7 @@
 import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { uploadAsset, uploadAssetVersion } from "@/app/actions";
+import { uploadFileDirect } from "@/lib/upload-client";
 import Icon from "./Icon";
 
 export const FOLDERS = ["شعارات", "قوالب", "صور عامة", "عام"];
@@ -52,8 +53,21 @@ export default function MediaLibrary({ assets, canUpload }: { assets: AssetRow[]
 
   const filtered = folder ? assets.filter((a) => a.folder === folder) : assets;
 
+  // يرفع الملف مباشرةً للتخزين (يتجاوز حد جسم الطلب) ويستبدله بمرجعه في الطلب.
+  // يعيد رسالة خطأ إن فشل، أو null عند النجاح/السقوط للمسار المحلي.
+  async function prepDirectUpload(formData: FormData): Promise<string | null> {
+    const file = formData.get("file") as File | null;
+    if (!file || file.size === 0) return null;
+    const up = await uploadFileDirect(file);
+    if (up && "error" in up) return up.error;
+    if (up) { formData.delete("file"); formData.set("fileMeta", JSON.stringify(up)); }
+    return null;
+  }
+
   function submitUpload(formData: FormData) {
     startTransition(async () => {
+      const upErr = await prepDirectUpload(formData);
+      if (upErr) { setMsg(`⚠ ${upErr}`); return; }
       const res = await uploadAsset(formData);
       const err = res && "error" in res ? res.error : null;
       setMsg(err ? `⚠ ${err}` : "✓ رُفع الملف بنجاح");
@@ -63,6 +77,8 @@ export default function MediaLibrary({ assets, canUpload }: { assets: AssetRow[]
 
   function submitVersion(assetId: string, formData: FormData) {
     startTransition(async () => {
+      const upErr = await prepDirectUpload(formData);
+      if (upErr) { setMsg(`⚠ ${upErr}`); return; }
       const res = await uploadAssetVersion(assetId, formData);
       const err = res && "error" in res ? res.error : null;
       setMsg(err ? `⚠ ${err}` : "✓ أُضيف الإصدار الجديد");

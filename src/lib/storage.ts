@@ -47,3 +47,27 @@ export async function storeFile(
   await fs.writeFile(path.join(dir, name), buffer);
   return { filePath: `/uploads/${name}` };
 }
+
+/**
+ * يُصدر رابط رفع موقّعاً يسمح للمتصفح برفع ملف واحد مباشرةً إلى التخزين
+ * دون المرور بالخادم — وبذلك نتجاوز حد جسم الطلب (~4.5MB على Vercel).
+ * يعيد أيضاً الرابط العام النهائي للملف. متاح في الإنتاج فقط (عند توفّر المفاتيح).
+ */
+export async function createSignedUploadUrl(
+  path: string,
+): Promise<{ signedUrl: string; publicUrl: string } | { error: string }> {
+  if (!usingSupabaseStorage) return { error: "no-storage" };
+  const { data, error } = await supabase().storage.from(BUCKET).createSignedUploadUrl(path);
+  if (error || !data) return { error: error?.message ?? "تعذّر إنشاء رابط الرفع" };
+  const { data: pub } = supabase().storage.from(BUCKET).getPublicUrl(path);
+  return { signedUrl: data.signedUrl, publicUrl: pub.publicUrl };
+}
+
+/**
+ * تحقّق أن الرابط يعود لتخزيننا نحن — يمنع حقن روابط خارجية عبر الحقل المخفي
+ * (المتصفح يرسل الرابط النهائي، فنرفض أي شيء لا ينتمي لحاوية التخزين العامة).
+ */
+export function isOwnStorageUrl(url: string): boolean {
+  if (usingSupabaseStorage) return url.startsWith(`${SUPABASE_URL}/storage/v1/object/public/${BUCKET}/`);
+  return url.startsWith("/uploads/");
+}
