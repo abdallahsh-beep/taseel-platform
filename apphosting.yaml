@@ -1,0 +1,55 @@
+# إعداد Firebase App Hosting لمنصة تأصيل
+# القاعدة والتخزين يبقيان على Supabase — هذا الملف يضبط استضافة تطبيق Next.js فقط.
+# الأسرار تُخزَّن في Cloud Secret Manager بالأسماء نفسها أدناه (نضبطها في المرحلة D).
+
+runConfig:
+  minInstances: 0 # 0 = بلا تكلفة عند الخمول (لكن مع «بدء بارد»)؛ اجعلها 1 لإبقاء نسخة دافئة (بتكلفة بسيطة)
+  maxInstances: 2
+  cpu: 1
+  memoryMiB: 1024
+  concurrency: 80
+
+env:
+  # متغيّرات عامة (ليست سرّية) — نصّ صريح
+  - variable: SUPABASE_URL
+    value: https://yimwmenrpnyfovaulphc.supabase.co
+    availability:
+      - BUILD
+      - RUNTIME
+  - variable: SUPABASE_BUCKET
+    value: media
+    availability:
+      - BUILD
+      - RUNTIME
+
+  # أسرار — مراجع إلى Cloud Secret Manager (القيم تُضبط في المرحلة D، لا تُكتب هنا)
+  - variable: DATABASE_URL
+    secret: DATABASE_URL
+    availability:
+      - BUILD
+      - RUNTIME
+  - variable: DIRECT_URL
+    secret: DIRECT_URL
+    availability:
+      - BUILD
+      - RUNTIME
+  - variable: SESSION_SECRET
+    secret: SESSION_SECRET
+    availability:
+      - BUILD
+      - RUNTIME
+  - variable: NEXT_SERVER_ACTIONS_ENCRYPTION_KEY
+    secret: NEXT_SERVER_ACTIONS_ENCRYPTION_KEY
+    availability:
+      - BUILD
+      - RUNTIME
+  - variable: SUPABASE_SERVICE_ROLE_KEY
+    secret: SUPABASE_SERVICE_ROLE_KEY
+    availability:
+      - BUILD
+      - RUNTIME
+  # اختياري لتفعيل توليد النص بالذكاء الاصطناعي (Claude): أنشئ سرّاً بالاسم نفسه ثم ألغِ التعليق
+  # - variable: ANTHROPIC_API_KEY
+  #   secret: ANTHROPIC_API_KEY
+  #   availability:
+  #     - RUNTIME
